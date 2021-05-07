@@ -1,0 +1,331 @@
+---
+title: "Data Mining_HW4"
+author: "Wen-Hsin Chang"
+date: "2021/4/15"
+output: github_document
+keep_md: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+```
+
+```{r, echo=FALSE, warnings=FALSE,message = FALSE}
+library(ggplot2)
+library(tidyverse)
+library(mosaic)
+library(dbplyr)
+library (readr)
+library(modelr)
+library(mosaic)
+library (readr)
+library(rsample)  # for creating train/test splits
+library(caret)
+library(installr)
+library(foreach)
+library(LICORS)
+
+library(igraph)
+library(tm)
+library(gamlr)
+library(SnowballC)
+```
+
+
+**Q1.Clustering and PCA**
+
+*PCA Analysis*
+
+```{r, echo=FALSE, message = FALSE}
+urlfile="https://raw.githubusercontent.com/jgscott/ECO395M/master/data/wine.csv"
+wine<-read_csv(url(urlfile))
+```
+
+
+```{r, echo=FALSE, message = FALSE}
+red <- c("red"=1, "white"=0)
+white <- c("red"=0, "white"=1)
+wine$red <- red[wine$color]
+wine$white <- white[wine$color]
+```
+
+
+```{r, echo=FALSE, message = FALSE}
+wine_results = wine %>%
+  group_by(quality) %>%
+  select(-color) %>%
+  summarize_all(mean) %>%
+  column_to_rownames(var="quality")
+```
+
+Firstly, I will start with PCA analysis. According to the following result, the PCA algorithm summarized the 11 chemical properties into 7 without any restriction initially. 
+
+```{r, echo=FALSE, message = FALSE}
+wine_PCA = prcomp(wine_results, scale=TRUE)
+summary(wine_PCA)
+round(wine_PCA$rotation[,1:7],2)
+```
+
+To assess the capability of PCA in distinguishing reds from whites, I plot the graph below. The result shows that PCA can distinguish the difference between the reds and the whites.PC1 accounts for almost all of the variation between reds and whites.
+
+```{r, echo=FALSE, message = FALSE}
+wine_color = wine %>%
+  group_by(red) %>%
+  select(-color) %>%
+  summarize_all(mean) %>%
+  column_to_rownames(var="red")
+wine_PCA_color = prcomp(wine_color, rank=2, scale=TRUE)
+plot(wine_PCA_color)
+
+```
+
+
+```{r, echo=FALSE, message = FALSE}
+summary(wine_PCA_color)
+round(wine_PCA_color$rotation[,1:2],2)
+```
+ 
+To assess the capability of PCA in distinguishing higher and lower quality wines, I conduct the following analysis. The results show that the PCA also did a great job in distinguishing wine quality. The top 3 principal components account for almost 95% of variations.
+
+
+```{r, echo=FALSE, message = FALSE}
+wine_quality = wine %>%
+  group_by(quality) %>%
+  select(-color) %>%
+  summarize_all(mean) %>%
+  column_to_rownames(var="quality")
+wine_PCA_quality = prcomp(wine_quality, rank=10, scale=TRUE)
+plot(wine_PCA_quality)
+
+```
+ 
+ 
+```{r, echo=FALSE, message = FALSE}
+summary(wine_PCA_quality)
+round(wine_PCA_quality$rotation[,1:7],2)
+```
+
+\newpage
+*K means clustering*
+
+Next, I will conduct K means clustering method to distinguish the reds from the whites. For the most important factor identified previously-fixed.acidity, the following result shows that clustering did well in distinguishing red wines compared to the whites. 
+
+```{r, echo=FALSE, message = FALSE}
+
+X = wine[,-(12:15)]
+X = scale(X, center=TRUE, scale=TRUE)
+mu = attr(X,"scaled:center")
+sigma = attr(X,"scaled:scale")
+clust1 = kmeans(X, 2, nstart=30)
+qplot(color, fixed.acidity, data=wine, color=factor(clust1$cluster))
+```
+
+
+Next, I will conduct K means clustering method to distinguish the reds from the whites. For the most important factor identified previously-fixed.acidity, the following result shows that clustering did well in distinguishing red wines compared to the whites. 
+
+
+```{r}
+qplot(pH,volatile.acidity , data=wine, color=factor(clust1$cluster))
+```
+
+As for quality, it is harder to visualize the result. For instance, in the case of total.sulfur.dioxide, the classification seems messier.  
+
+```{r}
+
+X = wine[,-(12:15)]
+X = scale(X, center=TRUE, scale=TRUE)
+mu = attr(X,"scaled:center")
+sigma = attr(X,"scaled:scale")
+clust1 = kmeans(X, 10, nstart=30)
+qplot(quality, total.sulfur.dioxide, data=wine, color=factor(clust1$cluster))
+
+```
+
+In sum, I think the PCA analysis makes more sense to me because each data point is like a combination of multiple basic "ingredients". I think we can also get the same conclusion when looking at the graph above.\newpage
+
+
+**Q2.Market segmentation**
+
+I will use PCA algorithm to address market segmentation since each data point is like a combination of basic "ingredients". Firstly, I will scale the data before I dive into PCA.
+
+```{r, echo=FALSE, warning=FALSE, message = FALSE}
+urlfile="https://raw.githubusercontent.com/jgscott/ECO395M/master/data/social_marketing.csv"
+social<-read_csv(url(urlfile))
+social<- social[-c(1)]
+```
+
+```{r, echo=FALSE, message = FALSE}
+social=scale(social,center=TRUE, scale =FALSE)
+social_PCA <- prcomp(social,rank=3)
+summary(social_PCA)
+social_PCA$rotation
+```
+
+According to the result above, the top 1 principal component indicates that NutrientH20's most important categories are health_nutrition, cooking, and personal_fitenss. It seems like a group of young professionals who are economically independent and therefore care more about foods, nutrition and personal_fitenss. Since NutrientH20 is a consumer drink brand, it may want to develop healthy drinks that can catch this group of people's attention.
+
+The 2 nd principal component accounts for chatter, photo_sharing, and shopping. It seems like a group of people who are like to chat about shopping and likes to share photos with their friends. NutrientH20 can make beautiful design of their bottle to attract attention from these people who love shopping and taking cool photos.  
+
+The 3 rd principal component correlated to politics and news. It is easy to imagine these are a group of people who follow all the news and are enthusiastic about politics. To position their brand, NutrientH20 can sponsor some political campaigns by giving out some free drinks.
+
+\newpage
+**Q3.Association rules for grocery purchases**
+
+First of all, I import the data at take a look at what it contains
+
+```{r, echo=FALSE, warning= FALSE,message = FALSE}
+#detach(package:tm, unload=TRUE)
+library(arules)  # has a big ecosystem of packages built around it
+library(arulesViz)
+groceries <- read.csv("~/GitHub/ECO395M/data/groceries.txt", header=FALSE)
+#groceries[,1] <- as.factor(groceries[,1])
+#groceries[,2] <- as.factor(groceries[,2])
+#groceries[,3] <- as.factor(groceries[,3])
+#groceries[,4] <- as.factor(groceries[,4])
+head(groceries)
+
+```
+
+To ensure the tightness of my estimation, I use confidence > 0.5 & support > 0.005, lift > 3 as thresholds. Under the restrictions, the common combinations in my sample include [whole milk, other vegetables], [sausage,frankfurter],and [pip fruit, tropical fruit]. The combinations  make intuitive sense because they are mostly similar categories of foods that people may buy together.
+
+
+```{r, echo=FALSE, message = FALSE, warnings=FALSE}
+## Cast this resulting list of playlists as a special arules "transactions" class.
+groceries = as(groceries, "transactions")
+groceries_rules = apriori(groceries,parameter=list(support=.005, confidence=.5, maxlen=2))
+inspect(subset(groceries_rules,lift>3))
+```
+
+Finally, I provide the scatter plot of my association rules. The result shows that most of the rules are condensed in the lower-left area of the graph, and those areas are also where the confidence level is high.
+
+
+```{r, echo=FALSE, message = FALSE}
+plot(groceries_rules, measure = c("support", "lift"), shading = "confidence")
+```
+
+```{r, echo=FALSE, message = FALSE}
+sub1 = subset(groceries_rules, subset=confidence > 0.5 & support > 0.005)
+plot(sub1, method='graph')
+```
+
+
+
+\newpage
+**Q4.Author attribution**
+
+Using the Reuters C50 corpus data, I conduct the following analysis. First, I roll the two directories (author&text) together into a single training corpus. For the word not seen before, I restrict test-set vocabulary to the terms in training data. Below I list the first few authors of the training set.
+
+```{r, echo=FALSE, , warnings= FALSE, message = FALSE}
+readerPlain = function(fname){
+  readPlain(elem=list(content=readLines(fname)), 
+            id=fname, language='en') }
+
+## Rolling two directories together into a single training corpus
+train_dirs = Sys.glob('~/GitHub/ECO395M/data/ReutersC50/C50train/*')
+train_dirs = train_dirs[c(43, 47)]
+head(train_dirs)
+
+```
+
+```{r, echo=FALSE,, warnings= FALSE, message = FALSE}
+#train_dirs
+
+file_list = NULL
+labels_train = NULL
+for(author in train_dirs) {
+  author_name = substring(author, first=65)
+  files_to_add = Sys.glob(paste0(author, '/*.txt'))
+  file_list = append(file_list, files_to_add)
+  labels_train = append(labels_train, rep(author_name, length(files_to_add)))
+}
+corpus_train = Corpus(DirSource(train_dirs)) 
+ccorpus_train = corpus_train %>% tm_map(., content_transformer(tolower)) %>% 
+  tm_map(., content_transformer(removeNumbers)) %>% 
+  tm_map(., content_transformer(removeNumbers)) %>% 
+  tm_map(., content_transformer(removePunctuation)) %>%
+  tm_map(., content_transformer(stripWhitespace)) %>%
+  tm_map(., content_transformer(removeWords), stopwords("SMART"))
+
+#head(labels_train)
+#tail(labels_train)
+#head(files_to_add)
+
+```
+
+
+```{r, echo=FALSE, warnings= FALSE,message = FALSE}
+## Same operations with the testing corpus
+test_dirs = Sys.glob('~/GitHub/ECO395M/data/ReutersC50/C50test/*')
+test_dirs = test_dirs[c(43, 47)]
+file_list = NULL
+labels_test = NULL
+for(author in test_dirs) {
+  author_name = substring(author, first=64)
+  files_to_add = Sys.glob(paste0(author, '/*.txt'))
+  file_list = append(file_list, files_to_add)
+  labels_test = append(labels_test, rep(author_name, length(files_to_add)))
+}
+
+
+corpus_test = Corpus(DirSource(test_dirs)) 
+
+corpus_test = corpus_test %>% tm_map(., content_transformer(tolower)) %>% 
+  tm_map(., content_transformer(removeNumbers)) %>% 
+  tm_map(., content_transformer(removePunctuation)) %>%
+  tm_map(., content_transformer(stripWhitespace)) %>%
+  tm_map(., content_transformer(removeWords), stopwords("SMART")) 
+
+#head(labels_test)
+#tail(labels_test)
+
+```
+
+When forming the feature matrix, I use the TfIDf weighting scheme and PCA algorithm to reduce  dimensions.
+
+```{r, echo=FALSE,  warnings= FALSE, message = FALSE}
+# create training and testing feature matrices
+DTM_train = DocumentTermMatrix(corpus_train)
+#DTM_train # some basic summary statistics
+
+# restrict test-set vocabulary to the terms in DTM_train
+DTM_test = DocumentTermMatrix(corpus_test,control = list(dictionary=Terms(DTM_train)))
+
+tfidf_train=weightTfIdf(DTM_train)
+x=as.matrix(tfidf_train)
+pca_train=prcomp(x,rank=2)
+plot(pca_train)
+```
+
+
+```{r, echo=FALSE, warnings= FALSE,message = FALSE}
+
+# outcome vector
+y_train = 0 + {labels_train=='SarahDavison'}
+
+#y_train =labels_train
+y_test = 0 + {labels_test=='SarahDavison'}
+
+#y_test=labels_test
+```
+
+Next, I use a lasso regression for document classification. The following result shows that the coefficients of logit results are between -0.5 to 1.5. 
+
+```{r, echo=FALSE, warnings= FALSE,message = FALSE}
+library(nnet)
+# lasso logistic regression for document classification
+logit1 = cv.gamlr(DTM_train, y_train, family='binomial', nfold=2)
+#coef(logit1, select='min') 
+plot(coef(logit1))
+yhat_test = predict(logit1, DTM_test, type='response')
+#xtabs(~ {yhat_test > 0} + y_test)
+
+```
+
+I also provide a boxplot of the performance of yhat_test below. To conclude, the lasso logistic regression has a relatively well test-set performance in classifying the authors. 
+
+
+```{r, echo=FALSE, warnings= FALSE,message = FALSE}
+boxplot(yhat_test ~ y_test)
+```
+
